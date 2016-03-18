@@ -1,0 +1,60 @@
+#!/usr/bin/python2
+
+import os
+import sys
+import argparse
+import re
+import datetime
+import time
+
+app_tx_log = "/home/mgodby/production_engineer_code_submission/log/app.stderr.log"
+
+def get_app_tx_rtime(lookback):
+    
+    txrec = re.compile('.*\[([0-9][0-9]\/[a-zA-Z]+\/[0-9]{4,4}\s+[0-9][0-9]:[0-9][0-9]:[0-9][0-9])\]\s+\"POST\s+\/transaction\s+HTTP\/1\.1\"\s+[0-9]{3,3}\s+-\s+([0-9]\.[0-9]+)')
+    
+    looktime = datetime.datetime.now() - datetime.timedelta(seconds=lookback)
+    
+    app_lat = []
+    
+    with open(app_tx_log) as f:
+        for line in f:
+            if txrec.match(line):
+                txtime = time.strptime(txrec.match(line).group(1), "%d/%b/%Y %H:%M:%S")[:06]
+                if datetime.datetime(txtime[0], txtime[1], txtime[2], txtime[3], txtime[4], txtime[5]) > looktime:
+                    app_lat.append(txrec.match(line).group(2))
+    
+    i = 0
+    for txlat in app_lat:
+        i = i + float(txlat)
+        
+    return (i / len(app_lat)) 
+     
+
+def main(arguments):
+
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('-w', '--warning', help="Warning threshold", type=int, required=True)
+    parser.add_argument('-c', '--critical', help="Critical threshold", type=int, required=True)
+    parser.add_argument('-t', '--time', help="Time Period", type=int, required=True)
+
+    args = parser.parse_args(arguments)
+
+    app_tx_rtime=get_app_tx_rtime(args.time)
+
+    if int(app_tx_rtime) < args.warning:
+        print "OK - %s ms avg. app response time." % app_tx_rtime
+        sys.exit(0)
+    elif int(app_tx_rtime) >= args.warning and int(app_tx_rtime) < args.critical:
+        print "WARNING - %s ms avg. app response time." % app_tx_rtime
+        sys.exit(1)
+    elif int(app_tx_rtime) >= args.critical:
+        print "CRITICAL - %s ms avg. app response time." % app_tx_rtime
+        sys.exit(2)
+    else:
+        print "UNKNOWN - %s ms avg. app response time." % app_tx_rtime
+        sys.exit(3)
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

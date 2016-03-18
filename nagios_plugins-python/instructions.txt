@@ -1,0 +1,40 @@
+To install plugins:
+
+  1. Place check_app_open_files and check_app_tx_response_time files into your nagios plugins directory on the server to be monitored (running app). This directory is /usr/lib/nagios/plugins/ by default on Debian Wheezy running Nagios 3
+
+  2. Ensure that one of the following two conditions is satisfied:
+    a. Nagios and Unicorn are both running as the same user (in which case you need to remove "sudo" from line 15 in check_app_open_files)
+    b. Ensure that the following line is in /etc/sudoers to allow nagios to run lsof as root(You can swap 'nagios' for whichever user you wish to run nagios as. Also acceptable to simply have said user as a member of a group with similar sudoer permissions):
+
+nagios  ALL=(root) NOPASSWD: /usr/bin/lsof
+
+  3. On the server to be monitored (running app), create file /etc/nagios/nrpe.d/app.cfg (or name of your choice within the same directory) with the following contents (adjust -w and -c arguments according to threshold preferences; -t argument on second line is for how many seconds of history to query for average tx response time):
+    
+command[check_app_open_files]=/usr/lib/nagios/plugins/check_app_open_files -w 10 -c 20
+command[check_app_tx_response_time]=/usr/lib/nagios/plugins/check_app_tx_response_time -w 4 -c 6 -t 300
+
+  4. Restart nagios nrpe server on monitored host with 'systemctl restart nagios-nrpe-server.service'
+
+  5. Append the following service definition to the .cfg file of your choice in /etc/nagios3/conf.d/ on the nagios monitoring server(replace 'wheezer1.mgodby.net' with the hostname to be monitored; can use a template other than generic-host; adjust check_interval as desired):
+
+define host {
+        use             generic-host
+        host_name       wheezer1.mgodby.net
+        alias           wheezer1.mgodby.net
+}
+
+define service {
+        host_name               wheezer1.mgodby.net
+        service_description     Beelzebub Open Files
+        check_command           check_nrpe_1arg!check_app_open_files
+        check_interval          1
+        use                     generic-service
+}
+
+define service {
+        host_name               wheezer1.mgodby.net
+        service_description     Beelzebub TX Response Time
+        check_command           check_nrpe_1arg!check_app_tx_response_time
+        check_interval          5
+        use                     generic-service
+}

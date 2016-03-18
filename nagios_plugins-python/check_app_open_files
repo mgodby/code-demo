@@ -1,0 +1,45 @@
+#!/usr/bin/python2
+
+import os
+import sys
+import argparse
+
+def get_app_open_files():
+    
+    # Set app_children list to empty, then run a system command to get a list of application child processes
+    app_children = []
+    for pids in os.popen("pgrep -P `ps -ef | grep 'app master' | grep -v grep | head -1 | awk '{print $2}'`").readlines():
+        app_children.append(pids.strip())
+
+    # Build an lsof command using the app_children list as the list of pids. Grep out the data files lines
+    app_lsof = "sudo lsof -p " + ','.join(map(str,app_children)) + " | grep -P .*\/data\/[0-9]+\.yaml"
+    #Finally, run the lsof and return the number of open files
+    app_open_files = len(os.popen(app_lsof).readlines())
+    return app_open_files
+
+def main(arguments):
+
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('-w', '--warning', help="Warning threshold", type=int, required=True)
+    parser.add_argument('-c', '--critical', help="Critical threshold", type=int, required=True)
+
+    args = parser.parse_args(arguments)
+
+    app_open_files=get_app_open_files()
+
+    if int(app_open_files) < args.warning:
+        print "OK - %s app open files." % app_open_files
+        sys.exit(0)
+    elif int(app_open_files) >= args.warning and int(app_open_files) < args.critical:
+        print "WARNING - %s app open files." % app_open_files
+        sys.exit(1)
+    elif int(app_open_files) >= args.critical:
+        print "CRITICAL - %s app open files." % app_open_files
+        sys.exit(2)
+    else:
+        print "UNKNOWN - %s app open files." % app_open_files
+        sys.exit(3)
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
